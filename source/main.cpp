@@ -141,16 +141,21 @@ static std::vector<Release> parseReleases(const std::string& rawJson) {
       r.commitId = jsonGetString(commitObj, "short_id");
     }
 
-    json_t* assetsArray = json_object_get(item, "assets");
-    if (json_is_array(assetsArray)) {
-      size_t ai;
-      json_t* assetItem;
-      json_array_foreach(assetsArray, ai, assetItem) {
-        Asset a;
-        a.name = jsonGetString(assetItem, "name");
-        a.url  = jsonGetString(assetItem, "url");
-        if (!a.name.empty() && !a.url.empty())
-          r.assets.push_back(a);
+    json_t* assetsObj = json_object_get(item, "assets");
+    if (json_is_object(assetsObj)) {
+      json_t* linksArray = json_object_get(assetsObj, "links");
+      if (json_is_array(linksArray)) {
+        size_t ai;
+        json_t* assetItem;
+        json_array_foreach(linksArray, ai, assetItem) {
+          Asset a;
+          a.name = jsonGetString(assetItem, "name");
+          a.url = jsonGetString(assetItem, "direct_asset_url");
+          if (a.url.empty())
+            a.url = jsonGetString(assetItem, "url");
+          if (!a.name.empty() && !a.url.empty())
+            r.assets.push_back(a);
+        }
       }
     }
 
