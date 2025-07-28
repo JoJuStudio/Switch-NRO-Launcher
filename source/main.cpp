@@ -111,6 +111,17 @@ static std::string jsonGetString(json_t* obj, const char* key) {
   return json_is_string(val) ? json_string_value(val) : "";
 }
 
+static std::string urlEncodeProject(const std::string& path) {
+  std::string out;
+  for (char c : path) {
+    if (c == '/')
+      out += "%2F";
+    else
+      out += c;
+  }
+  return out;
+}
+
 // -------------------- Parse Releases from JSON --------------------
 
 static std::vector<Release> parseReleases(const std::string& rawJson) {
@@ -141,16 +152,35 @@ static std::vector<Release> parseReleases(const std::string& rawJson) {
       r.commitId = jsonGetString(commitObj, "short_id");
     }
 
-    json_t* assetsArray = json_object_get(item, "assets");
-    if (json_is_array(assetsArray)) {
-      size_t ai;
-      json_t* assetItem;
-      json_array_foreach(assetsArray, ai, assetItem) {
-        Asset a;
-        a.name = jsonGetString(assetItem, "name");
-        a.url  = jsonGetString(assetItem, "url");
-        if (!a.name.empty() && !a.url.empty())
-          r.assets.push_back(a);
+    json_t* assetsObj = json_object_get(item, "assets");
+    if (json_is_object(assetsObj)) {
+      json_t* links = json_object_get(assetsObj, "links");
+      if (json_is_array(links)) {
+        size_t ai;
+        json_t* linkItem;
+        json_array_foreach(links, ai, linkItem) {
+          Asset a;
+          a.name = jsonGetString(linkItem, "name");
+          a.url = jsonGetString(linkItem, "direct_asset_url");
+          if (a.url.empty())
+            a.url = jsonGetString(linkItem, "url");
+          if (!a.name.empty() && !a.url.empty())
+            r.assets.push_back(a);
+        }
+      }
+
+      json_t* sources = json_object_get(assetsObj, "sources");
+      if (json_is_array(sources)) {
+        size_t si;
+        json_t* srcItem;
+        json_array_foreach(sources, si, srcItem) {
+          Asset a;
+          std::string fmt = jsonGetString(srcItem, "format");
+          a.name = "Source (" + fmt + ")";
+          a.url = jsonGetString(srcItem, "url");
+          if (!a.url.empty())
+            r.assets.push_back(a);
+        }
       }
     }
 
@@ -172,6 +202,7 @@ static std::vector<Release> fetchReleases(const std::string& apiUrl,
   if (!token.empty()) {
     headers = curl_slist_append(headers, ("PRIVATE-TOKEN: " + token).c_str());
   }
+  headers = curl_slist_append(headers, "Accept: application/json");
 
   curl.setopt(CURLOPT_HTTPHEADER, headers);
   curl.setopt(CURLOPT_URL, apiUrl.c_str());
@@ -307,7 +338,26 @@ static void downloadAsset(const Asset& a, const std::string& token) {
       curl.setopt(CURLOPT_HTTPHEADER, headers);
     }
 
-    curl.setopt(CURLOPT_URL, a.url.c_str());
+    std::string url = a.url;
+    size_t jobs = url.find("/-/jobs/");
+    if (jobs != std::string::npos) {
+      size_t scheme_end = url.find("//") + 2;
+      size_t domain_end = url.find('/', scheme_end);
+      if (domain_end != std::string::npos && domain_end < jobs) {
+        std::string domain = url.substr(0, domain_end);
+        std::string project = url.substr(domain_end + 1, jobs - domain_end - 1);
+        size_t id_start = jobs + 7; // len("/-/jobs/") == 7
+        size_t id_end = url.find('/', id_start);
+        std::string jobId = url.substr(id_start, id_end - id_start);
+        size_t raw = url.find("/artifacts/raw/", id_end);
+        if (raw != std::string::npos) {
+          std::string rest = url.substr(raw + strlen("/artifacts/raw/"));
+          url = domain + "/api/v4/projects/" + urlEncodeProject(project) + "/jobs/" + jobId + "/artifacts/" + rest;
+        }
+      }
+    }
+
+    curl.setopt(CURLOPT_URL, url.c_str());
     curl.setopt(CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl.getHandle(), CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(curl.getHandle(), CURLOPT_XFERINFOFUNCTION,
@@ -404,7 +454,8 @@ int main() {
   const std::string apiUrl =
       "https://gitlab.your-ass-is.exposed/api/v4/projects/"
       "craftcore%2Fclient-engine/releases";
-  const std::string token = GITLAB_PRIVATE_TOKEN;
+  const char* envToken = std::getenv("GITLAB_PRIVATE_TOKEN");
+  const std::string token = envToken && *envToken ? envToken : GITLAB_PRIVATE_TOKEN;
 
   if (token.empty() || token == "YOUR_ACTUAL_GITLAB_TOKEN_HERE") {
     consoleClear();
