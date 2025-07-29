@@ -352,6 +352,9 @@ static void downloadAsset(const Asset& a, const std::string& token) {
         size_t art = url.find("/artifacts/", id_end);
         if (art != std::string::npos) {
           std::string rest = url.substr(art + strlen("/artifacts/"));
+          const std::string rawPrefix = "raw/";
+          if (rest.rfind(rawPrefix, 0) == 0)
+            rest = rest.substr(rawPrefix.size());
           url = domain + "/api/v4/projects/" + urlEncodeProject(project) + "/jobs/" + jobId + "/artifacts/" + rest;
         }
       }
