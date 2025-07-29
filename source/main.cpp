@@ -346,12 +346,12 @@ static void downloadAsset(const Asset& a, const std::string& token) {
       if (domain_end != std::string::npos && domain_end < jobs) {
         std::string domain = url.substr(0, domain_end);
         std::string project = url.substr(domain_end + 1, jobs - domain_end - 1);
-        size_t id_start = jobs + 7; // len("/-/jobs/") == 7
+        size_t id_start = jobs + strlen("/-/jobs/");
         size_t id_end = url.find('/', id_start);
         std::string jobId = url.substr(id_start, id_end - id_start);
-        size_t raw = url.find("/artifacts/raw/", id_end);
-        if (raw != std::string::npos) {
-          std::string rest = url.substr(raw + strlen("/artifacts/raw/"));
+        size_t art = url.find("/artifacts/", id_end);
+        if (art != std::string::npos) {
+          std::string rest = url.substr(art + strlen("/artifacts/"));
           url = domain + "/api/v4/projects/" + urlEncodeProject(project) + "/jobs/" + jobId + "/artifacts/" + rest;
         }
       }
@@ -454,8 +454,7 @@ int main() {
   const std::string apiUrl =
       "https://gitlab.your-ass-is.exposed/api/v4/projects/"
       "craftcore%2Fclient-engine/releases";
-  const char* envToken = std::getenv("GITLAB_PRIVATE_TOKEN");
-  const std::string token = envToken && *envToken ? envToken : GITLAB_PRIVATE_TOKEN;
+  const std::string token = GITLAB_PRIVATE_TOKEN;
 
   if (token.empty() || token == "YOUR_ACTUAL_GITLAB_TOKEN_HERE") {
     consoleClear();

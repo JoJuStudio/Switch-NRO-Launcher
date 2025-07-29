@@ -6,15 +6,8 @@ and allows downloading assets directly on the console.
 ## Token configuration
 
 The application requires a GitLab personal access token to access the release
-API. You can provide the token in two ways:
-
-1. **Environment variable**: set `GITLAB_PRIVATE_TOKEN` when launching the
-   application or building the project.
-2. **Compile-time token**: edit `source/token.h` and replace the placeholder
-   string with your token.
-
-Providing the token via environment variable avoids hardcoding secrets in the
-source tree.
+API. Edit `source/token.h` and replace the placeholder string with your token
+before building. The token is compiled into the application.
 
 ## Building
 
